@@ -1,8 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2015-2016 Oleksandr Tymoshenko <gonzo@bluezbox.com>
-** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -45,18 +43,18 @@ class QBsdSysMouseHandler : public QObject
 {
     Q_OBJECT
 public:
-    QBsdSysMouseHandler(const QString &key, const QString &specification);
-    ~QBsdSysMouseHandler();
+    explicit QBsdSysMouseHandler(const QString &key, const QString &specification);
+    ~QBsdSysMouseHandler() override;
 
 private slots:
     void readMouseData();
 
 private:
-    QSocketNotifier * m_notify;
-    int m_dev_fd;
-    int m_packet_size;
+    QSocketNotifier * m_notifier;
+    int m_devFd;
+    int m_packetSize;
     int m_x, m_y;
-    int m_xoffset, m_yoffset;
+    int m_xOffset, m_yOffset;
     Qt::MouseButtons m_buttons;
 };
 

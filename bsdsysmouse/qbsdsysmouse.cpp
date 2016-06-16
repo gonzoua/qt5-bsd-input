@@ -1,8 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2015-2016 Oleksandr Tymoshenko <gonzo@bluezbox.com>
-** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -40,24 +38,35 @@
 #include <QGuiApplication>
 #include <qpa/qwindowsysteminterface.h>
 
-#include <errno.h>
-
+#include <private/qcore_unix_p.h>
 #include <qdebug.h>
 
-#include <sys/mouse.h>
+#include <errno.h>
 #include <fcntl.h>
+#include <sys/mouse.h>
 #include <unistd.h>
 
 QT_BEGIN_NAMESPACE
 
-QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key,
-                                                 const QString &specification)
-    : m_notify(0), m_packet_size(0), m_x(0), m_y(0), m_xoffset(0), m_yoffset(0), m_buttons(Qt::NoButton)
+enum {
+    PsmLevelBasic = 0,
+    PsmLevelExtended = 1,
+    PsmLevelNative = 2
+};
+
+QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key, const QString &specification) :
+    m_notifier(0),
+    m_packetSize(0),
+    m_x(0),
+    m_y(0),
+    m_xOffset(0),
+    m_yOffset(0),
+    m_buttons(Qt::NoButton)
 {
     QString device;
     int level;
+    Q_UNUSED(key);
 
-    // qDebug() << "QBsdSysMouseHandler" << key << specification;
     setObjectName(QLatin1String("BSD Sysmouse Handler"));
 
     if (specification.startsWith("/dev/"))
@@ -66,39 +75,49 @@ QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key,
     if (device.isEmpty())
         device = QByteArrayLiteral("/dev/sysmouse");
 
-    m_dev_fd = open(device.toLatin1(), O_RDONLY);
-    if (m_dev_fd < 0) {
-        qErrnoWarning(errno, "open(%s) failed", (const char*)device.toLatin1());
+    const QByteArray devPath = QFile::encodeName(device);
+    m_devFd = QT_OPEN(devPath.constData(), O_RDONLY);
+    if (m_devFd < 0) {
+        qErrnoWarning(errno, "open(%s) failed", devPath.constData());
         return;
     }
 
-    if (::ioctl(m_dev_fd, MOUSE_GETLEVEL, &level)) {
-        qErrnoWarning(errno, "ioctl(%s, MOUSE_GETLEVEL) failed", (const char*)device.toLatin1());
-        m_packet_size = 5;
-    }
-    else {
-        if (level)
-            m_packet_size = 8;
-        else
-            m_packet_size = 5;
+    if (ioctl(m_devFd, MOUSE_GETLEVEL, &level)) {
+        qErrnoWarning(errno, "ioctl(%s, MOUSE_GETLEVEL) failed", devPath.constData());
+        close(m_devFd);
+        m_devFd = -1;
+        return;
     }
 
-    if (fcntl(m_dev_fd, F_SETFL, O_NONBLOCK)) {
-        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", (const char*)device.toLatin1());
+    switch (level) {
+    case PsmLevelBasic:
+        m_packetSize = 5;
+        break;
+    case PsmLevelExtended:
+        m_packetSize = 8;
+        break;
+    default:
+        qWarning("Unsupported mouse device operation level: %d", level);
+        close(m_devFd);
+        m_devFd = -1;
+        return;
     }
 
-    if (m_dev_fd >= 0) {
-        m_notify = new QSocketNotifier(m_dev_fd, QSocketNotifier::Read, this);
-        connect(m_notify, SIGNAL(activated(int)), this, SLOT(readMouseData()));
-    } else {
-        qWarning("Cannot open mouse input device '%s': %s", (const char*)device.toLatin1(), strerror(errno));
+    if (fcntl(m_devFd, F_SETFL, O_NONBLOCK)) {
+        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", devPath.constData());
+        close(m_devFd);
+        m_devFd = -1;
+        return;
     }
+
+    m_notifier = new QSocketNotifier(m_devFd, QSocketNotifier::Read, this);
+    connect(m_notifier, SIGNAL(activated(int)), this, SLOT(readMouseData()));
 }
 
 QBsdSysMouseHandler::~QBsdSysMouseHandler()
 {
-    if (m_dev_fd != -1)
-        close(m_dev_fd);
+    if (m_devFd != -1)
+        close(m_devFd);
 }
 
 void QBsdSysMouseHandler::readMouseData()
@@ -108,13 +127,14 @@ void QBsdSysMouseHandler::readMouseData()
     int16_t relx, rely;
     int bytes;
 
-    if (m_dev_fd < 0)
+    if (m_devFd < 0)
         return;
 
-    if (m_packet_size == 0)
+    if (m_packetSize == 0)
         return;
 
-    while ((bytes = read(m_dev_fd, packet, m_packet_size)) == m_packet_size) {
+    // packet format described in mouse(4)
+    while ((bytes = read(m_devFd, packet, m_packetSize)) == m_packetSize) {
         relx = packet[1] + packet[3];
         rely = -(packet[2] + packet[4]);
 
@@ -126,25 +146,25 @@ void QBsdSysMouseHandler::readMouseData()
 
     // clamp to screen geometry
     QRect g = QGuiApplication::primaryScreen()->virtualGeometry();
-    if (m_x + m_xoffset < g.left())
-        m_x = g.left() - m_xoffset;
-    else if (m_x + m_xoffset > g.right())
-        m_x = g.right() - m_xoffset;
+    if (m_x + m_xOffset < g.left())
+        m_x = g.left() - m_xOffset;
+    else if (m_x + m_xOffset > g.right())
+        m_x = g.right() - m_xOffset;
 
-    if (m_y + m_yoffset < g.top())
-        m_y = g.top() - m_yoffset;
-    else if (m_y + m_yoffset > g.bottom())
-        m_y = g.bottom() - m_yoffset;
+    if (m_y + m_yOffset < g.top())
+        m_y = g.top() - m_yOffset;
+    else if (m_y + m_yOffset > g.bottom())
+        m_y = g.bottom() - m_yOffset;
 
-    QPoint pos(m_x + m_xoffset, m_y + m_yoffset);
+    QPoint pos(m_x + m_xOffset, m_y + m_yOffset);
     m_buttons = Qt::NoButton;
     if (!(status & MOUSE_SYS_BUTTON1UP))
-	m_buttons |= Qt::LeftButton;
+        m_buttons |= Qt::LeftButton;
     if (!(status & MOUSE_SYS_BUTTON2UP))
-	m_buttons |= Qt::MiddleButton;
+        m_buttons |= Qt::MiddleButton;
     if (!(status & MOUSE_SYS_BUTTON3UP))
-	m_buttons |= Qt::RightButton;
-    
+        m_buttons |= Qt::RightButton;
+
     QWindowSystemInterface::handleMouseEvent(0, pos, pos, m_buttons);
 }
 

@@ -1,8 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2015-2016 Oleksandr Tymoshenko <gonzo@bluezbox.com>
-** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -43,15 +41,8 @@ class QBsdSysMousePlugin : public QGenericPlugin
     Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QGenericPluginFactoryInterface" FILE "bsdsysmouse.json")
 
 public:
-    QBsdSysMousePlugin();
-
-    QObject* create(const QString &key, const QString &specification);
+    QObject* create(const QString &key, const QString &specification) override;
 };
-
-QBsdSysMousePlugin::QBsdSysMousePlugin()
-    : QGenericPlugin()
-{
-}
 
 QObject* QBsdSysMousePlugin::create(const QString &key,
                                    const QString &specification)
