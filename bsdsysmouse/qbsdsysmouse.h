@@ -50,7 +50,7 @@ private slots:
     void readMouseData();
 
 private:
-    QSocketNotifier * m_notifier;
+    QScopedPointer<QSocketNotifier> m_notifier;
     int m_devFd;
     int m_packetSize;
     int m_x, m_y;

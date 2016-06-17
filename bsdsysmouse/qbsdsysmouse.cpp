@@ -110,8 +110,8 @@ QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key, const QString &spec
         return;
     }
 
-    m_notifier = new QSocketNotifier(m_devFd, QSocketNotifier::Read, this);
-    connect(m_notifier, SIGNAL(activated(int)), this, SLOT(readMouseData()));
+    m_notifier.reset(new QSocketNotifier(m_devFd, QSocketNotifier::Read, this));
+    connect(m_notifier.data(), SIGNAL(activated(int)), this, SLOT(readMouseData()));
 }
 
 QBsdSysMouseHandler::~QBsdSysMouseHandler()
