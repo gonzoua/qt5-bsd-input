@@ -57,8 +57,8 @@ namespace QBsdKeyboardMap {
 
     enum Flags {
         NoFlags    = 0x00,
-        IsLetter   = 0x02,
-        IsModifier = 0x04
+        IsLetter   = 0x01,
+        IsModifier = 0x02
     };
 
     enum Modifiers {
@@ -80,14 +80,10 @@ inline QDataStream &operator>>(QDataStream &ds, QBsdKeyboardMap::Mapping &m)
     return ds >> m.keycode >> m.unicode >> m.qtcode >> m.modifiers >> m.flags >> m.special;
 }
 
-inline QDataStream &operator<<(QDataStream &ds, const QBsdKeyboardMap::Mapping &m)
-{
-    return ds << m.keycode << m.unicode << m.qtcode << m.modifiers << m.flags << m.special;
-}
-
 class QBsdKeyboardHandler : public QObject
 {
     Q_OBJECT
+
 public:
     explicit QBsdKeyboardHandler(const QString &key, const QString &specification);
     ~QBsdKeyboardHandler() override;
@@ -110,7 +106,7 @@ protected:
     void switchLed(int led, bool state);
     void processKeycode(quint16 keycode, bool pressed, bool autorepeat);
     void processKeyEvent(int nativecode, int unicode, int qtcode,
-                         Qt::KeyboardModifiers modifiers, bool isPress, bool autoRepeat);\
+                         Qt::KeyboardModifiers modifiers, bool isPress, bool autoRepeat);
     void revertTTYSettings();
 
 private slots:

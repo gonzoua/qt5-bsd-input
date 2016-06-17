@@ -37,6 +37,7 @@
 #include <QPoint>
 #include <QGuiApplication>
 #include <qpa/qwindowsysteminterface.h>
+#include <private/qcore_unix_p.h>
 
 #include <qdebug.h>
 
@@ -55,6 +56,11 @@
 
 QT_BEGIN_NAMESPACE
 
+enum {
+    Bsd_KeyCodeMask     = 0x7f,
+    Bsd_KeyPressedMask  = 0x80
+};
+
 #include "qbsdkeyboard_defaultmap.h"
 
 QBsdKeyboardHandler::QBsdKeyboardHandler(const QString &key,
@@ -66,34 +72,34 @@ QBsdKeyboardHandler::QBsdKeyboardHandler(const QString &key,
     m_keymapSize(0)
 {
     Q_UNUSED(key);
-    QString device;
+    QByteArray device;
 
     setObjectName(QLatin1String("BSD Keyboard Handler"));
 
     if (specification.startsWith("/dev/"))
-        device = specification.toLocal8Bit();
+        device = QFile::encodeName(specification);
 
     if (device.isEmpty()) {
         device = QByteArrayLiteral("STDIN");
         m_fd = fileno(stdin);
-    } 
+    }
     else {
-        m_fd = open(device.toLatin1(), O_RDONLY);
+        m_fd = QT_OPEN(device.constData(), O_RDONLY);
         if (!m_fd) {
-            qErrnoWarning(errno, "open(%s) failed", (const char*)device.toLatin1());
+            qErrnoWarning(errno, "open(%s) failed", device.constData());
             return;
         }
         m_shouldClose = true;
     }
 
     if (ioctl(m_fd, KDGKBMODE, &m_origKbdMode)) {
-        qErrnoWarning(errno, "ioctl(%s, KDGKBMODE) failed", (const char*)device.toLatin1());
+        qErrnoWarning(errno, "ioctl(%s, KDGKBMODE) failed", device.constData());
         revertTTYSettings();
         return;
     }
 
     if (ioctl(m_fd, KDSKBMODE, K_CODE) < 0) {
-        qErrnoWarning(errno, "ioctl(%s, KDSKBMODE) failed", (const char*)device.toLatin1());
+        qErrnoWarning(errno, "ioctl(%s, KDSKBMODE) failed", device.constData());
         revertTTYSettings();
         return;
     }
@@ -113,18 +119,18 @@ QBsdKeyboardHandler::QBsdKeyboardHandler(const QString &key,
         cfsetispeed(&kbdtty, 9600);
         cfsetospeed(&kbdtty, 9600);
         if (tcsetattr(m_fd, TCSANOW, &kbdtty) < 0) {
-            qErrnoWarning(errno, "tcsetattr(%s) failed", (const char*)device.toLatin1());
+            qErrnoWarning(errno, "tcsetattr(%s) failed", device.constData());
             revertTTYSettings();
             return;
         }
     } else {
-        qErrnoWarning(errno, "tcgetattr(%s) failed", (const char*)device.toLatin1());
+        qErrnoWarning(errno, "tcgetattr(%s) failed", device.constData());
         revertTTYSettings();
         return;
     }
 
     if (fcntl(m_fd, F_SETFL, O_NONBLOCK)) {
-        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", (const char*)device.toLatin1());
+        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", device.constData());
         revertTTYSettings();
         return;
     }
@@ -152,6 +158,7 @@ void QBsdKeyboardHandler::revertTTYSettings()
         ioctl(m_fd, KDSKBMODE, m_origKbdMode);
         if (m_shouldClose)
             close(m_fd);
+        m_fd = -1;
     }
 }
 
@@ -175,8 +182,8 @@ void QBsdKeyboardHandler::readKeyboardData()
         }
 
         for (int i = 0; i < result; ++i) {
-            quint16 code = buffer[i] & 0x7f;
-            bool pressed = (buffer[i] & 0x80) ? false : true;
+            quint16 code = buffer[i] & Bsd_KeyCodeMask;
+            bool pressed = (buffer[i] & Bsd_KeyPressedMask) ? false : true;
 
             processKeycode(code, pressed, false);
         }
@@ -219,10 +226,10 @@ void QBsdKeyboardHandler::processKeycode(quint16 keycode, bool pressed, bool aut
         modifiers ^= QBsdKeyboardMap::ModShift;
 
 #ifdef QT_BSD_KEYBOARD_DEBUG
-    qWarning("Processing key event: keycode=%3d, modifiers=%02x pressed=%d, autorepeat=%d  |  plain=%d, withmod=%d, size=%d", \
+    qWarning("Processing key event: keycode=%3d, modifiers=%02x pressed=%d, autorepeat=%d  |  plain=%jd, withmod=%jd, size=%d", \
              keycode, modifiers, pressed ? 1 : 0, autorepeat ? 1 : 0, \
-             map_plain ? map_plain - m_keymap : -1, \
-             map_withmod ? map_withmod - m_keymap : -1, \
+             map_plain ? (uintptr_t)(map_plain - m_keymap) : -1, \
+             map_withmod ? (uintptr_t)(map_withmod - m_keymap) : -1, \
              m_keymapSize);
 #endif
 
@@ -386,7 +393,7 @@ void QBsdKeyboardHandler::resetKeymap()
         if ((leds & LED_SCR) > 0)
             m_scrollLock = true;
 #ifdef QT_BSD_KEYBOARD_DEBUG
-        qWarning("numlock=%d , capslock=%d, scrolllock=%d",m_locks[1],m_locks[0],m_locks[2]);
+        qWarning("numlock=%d , capslock=%d, scrolllock=%d",m_numLock, m_capsLock, m_scrollLock);
 #endif
     }
 }
