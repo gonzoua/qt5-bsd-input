@@ -1,8 +1,6 @@
 /****************************************************************************
 **
-** Copyright (C) 2015 The Qt Company Ltd.
 ** Copyright (C) 2015-2016 Oleksandr Tymoshenko <gonzo@bluezbox.com>
-** Contact: http://www.qt.io/licensing/
 **
 ** This file is part of the QtGui module of the Qt Toolkit.
 **
@@ -36,7 +34,6 @@
 #define QBSDKEYBOARD_H
 
 #include <qobject.h>
-//#include <Qt>
 #include <QDataStream>
 
 QT_BEGIN_NAMESPACE
@@ -59,26 +56,9 @@ namespace QBsdKeyboardMap {
     };
 
     enum Flags {
-        IsDead     = 0x01,
+        NoFlags    = 0x00,
         IsLetter   = 0x02,
-        IsModifier = 0x04,
-        IsSystem   = 0x08
-    };
-
-    enum System {
-        SystemConsoleFirst    = 0x0100,
-        SystemConsoleMask     = 0x007f,
-        SystemConsoleLast     = 0x017f,
-        SystemConsolePrevious = 0x0180,
-        SystemConsoleNext     = 0x0181,
-        SystemReboot          = 0x0200,
-        SystemZap             = 0x0300
-    };
-
-    struct Composing {
-        quint16 first;
-        quint16 second;
-        quint16 result;
+        IsModifier = 0x04
     };
 
     enum Modifiers {
@@ -105,22 +85,12 @@ inline QDataStream &operator<<(QDataStream &ds, const QBsdKeyboardMap::Mapping &
     return ds << m.keycode << m.unicode << m.qtcode << m.modifiers << m.flags << m.special;
 }
 
-inline QDataStream &operator>>(QDataStream &ds, QBsdKeyboardMap::Composing &c)
-{
-    return ds >> c.first >> c.second >> c.result;
-}
-
-inline QDataStream &operator<<(QDataStream &ds, const QBsdKeyboardMap::Composing &c)
-{
-    return ds << c.first << c.second << c.result;
-}
-
 class QBsdKeyboardHandler : public QObject
 {
     Q_OBJECT
 public:
-    QBsdKeyboardHandler(const QString &key, const QString &specification);
-    ~QBsdKeyboardHandler();
+    explicit QBsdKeyboardHandler(const QString &key, const QString &specification);
+    ~QBsdKeyboardHandler() override;
 
     enum KeycodeAction {
         None               = 0,
@@ -130,15 +100,7 @@ public:
         NumLockOff         = 0x02000000,
         NumLockOn          = 0x02000001,
         ScrollLockOff      = 0x03000000,
-        ScrollLockOn       = 0x03000001,
-
-        Reboot             = 0x04000000,
-
-        PreviousConsole    = 0x05000000,
-        NextConsole        = 0x05000001,
-        SwitchConsoleFirst = 0x06000000,
-        SwitchConsoleLast  = 0x0600007f,
-        SwitchConsoleMask  = 0x0000007f
+        ScrollLockOn       = 0x03000001
     };
 
     static Qt::KeyboardModifiers toQtModifiers(quint8 mod)
@@ -155,11 +117,7 @@ public:
         return qtmod;
     }
 
-
-
 protected:
-    bool loadKeymap(const QString &file);
-    void unloadKeymap();
     void switchLed(int led, bool state);
     KeycodeAction processKeycode(quint16 keycode, bool pressed, bool autorepeat);
     void processKeyEvent(int nativecode, int unicode, int qtcode,
@@ -167,34 +125,25 @@ protected:
     void revertTTYSettings();
 
 private slots:
+    void resetKeymap();
     void readKeyboardData();
 
 private:
-    QSocketNotifier * m_notify;
-    struct termios *m_kbd_orig_tty;
+    QScopedPointer<QSocketNotifier> m_notifier;
+    struct termios *m_kbdOrigTty;
+    int m_origKbdMode;
     int m_fd;
-    bool m_should_close;
+    bool m_shouldClose;
     QString m_spec;
 
     // keymap handling
     quint8 m_modifiers;
     quint8 m_locks[3];
-    int m_composing;
-    quint16 m_dead_unicode;
-
-    bool m_no_zap;
-    bool m_do_compose;
 
     const QBsdKeyboardMap::Mapping *m_keymap;
-    int m_keymap_size;
-    const QBsdKeyboardMap::Composing *m_keycompose;
-    int m_keycompose_size;
+    int m_keymapSize;
 
-    int m_orig_kbd_mode;
-
-    static const QBsdKeyboardMap::Mapping s_keymap_default[];
-    static const QBsdKeyboardMap::Composing s_keycompose_default[];
-
+    static const QBsdKeyboardMap::Mapping s_keymapDefault[];
 };
 
 QT_END_NAMESPACE
