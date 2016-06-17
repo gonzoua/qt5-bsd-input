@@ -178,29 +178,7 @@ void QBsdKeyboardHandler::readKeyboardData()
             quint16 code = buffer[i] & 0x7f;
             bool pressed = (buffer[i] & 0x80) ? false : true;
 
-            QBsdKeyboardHandler::KeycodeAction ka;
-            ka = processKeycode(code, pressed, false);
-
-            switch (ka) {
-            case QBsdKeyboardHandler::CapsLockOn:
-            case QBsdKeyboardHandler::CapsLockOff:
-                switchLed(LED_CAP, ka == QBsdKeyboardHandler::CapsLockOn);
-                break;
-
-            case QBsdKeyboardHandler::NumLockOn:
-            case QBsdKeyboardHandler::NumLockOff:
-                switchLed(LED_NUM, ka == QBsdKeyboardHandler::NumLockOn);
-                break;
-
-            case QBsdKeyboardHandler::ScrollLockOn:
-            case QBsdKeyboardHandler::ScrollLockOff:
-                switchLed(LED_SCR, ka == QBsdKeyboardHandler::ScrollLockOn);
-                break;
-
-            default:
-                // ignore console switching and reboot
-                break;
-            }
+            processKeycode(code, pressed, false);
         }
     }
 }
@@ -213,9 +191,8 @@ void QBsdKeyboardHandler::processKeyEvent(int nativecode, int unicode, int qtcod
                                                    (unicode != 0xffff ) ? QString(unicode) : QString(), autoRepeat);
 }
 
-QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 keycode, bool pressed, bool autorepeat)
+void QBsdKeyboardHandler::processKeycode(quint16 keycode, bool pressed, bool autorepeat)
 {
-    KeycodeAction result = None;
     bool first_press = pressed && !autorepeat;
 
     const QBsdKeyboardMap::Mapping *map_plain = 0;
@@ -231,14 +208,14 @@ QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 k
                 map_plain = m;
 
             quint8 testmods = m_modifiers;
-            if (m_locks[0] /*CapsLock*/ && (m->flags & QBsdKeyboardMap::IsLetter))
+            if (m_capsLock && (m->flags & QBsdKeyboardMap::IsLetter))
                 testmods ^= QBsdKeyboardMap::ModShift;
             if (m->modifiers == testmods)
                 map_withmod = m;
         }
     }
 
-    if (m_locks[0] /*CapsLock*/ && map_withmod && (map_withmod->flags & QBsdKeyboardMap::IsLetter))
+    if (m_capsLock && map_withmod && (map_withmod->flags & QBsdKeyboardMap::IsLetter))
         modifiers ^= QBsdKeyboardMap::ModShift;
 
 #ifdef QT_BSD_KEYBOARD_DEBUG
@@ -256,7 +233,7 @@ QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 k
         // we couldn't even find a plain mapping
         qWarning("Could not find a suitable mapping for keycode: %3d, modifiers: %02x", keycode, modifiers);
 #endif
-        return result;
+        return;
     }
 
     bool skip = false;
@@ -272,14 +249,21 @@ QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 k
     } else if (qtcode >= Qt::Key_CapsLock && qtcode <= Qt::Key_ScrollLock) {
         // (Caps|Num|Scroll)Lock
         if (first_press) {
-            quint8 &lock = m_locks[qtcode - Qt::Key_CapsLock];
-            lock ^= 1;
-
             switch (qtcode) {
-            case Qt::Key_CapsLock  : result = lock ? CapsLockOn : CapsLockOff; break;
-            case Qt::Key_NumLock   : result = lock ? NumLockOn : NumLockOff; break;
-            case Qt::Key_ScrollLock: result = lock ? ScrollLockOn : ScrollLockOff; break;
-            default                : break;
+            case Qt::Key_CapsLock:
+                m_capsLock = !m_capsLock;
+                switchLed(LED_CAP, m_capsLock);
+                break;
+            case Qt::Key_NumLock:
+                m_numLock = !m_numLock;
+                switchLed(LED_NUM, m_numLock);
+                break;
+            case Qt::Key_ScrollLock:
+                m_scrollLock = !m_scrollLock;
+                switchLed(LED_SCR, m_scrollLock);
+                break;
+            default:
+                break;
             }
         }
     }
@@ -300,7 +284,7 @@ QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 k
         qWarning("Processing: uni=%04x, qt=%08x, qtmod=%08x", unicode, qtcode & ~modmask, (qtcode & modmask));
 #endif
         //If NumLockOff and keypad key pressed remap event sent
-        if (!m_locks[1] &&
+        if (!m_numLock &&
              (qtcode & Qt::KeypadModifier)) {
             unicode = 0xffff;
             int oldMask = (qtcode & modmask);
@@ -345,8 +329,6 @@ QBsdKeyboardHandler::KeycodeAction QBsdKeyboardHandler::processKeycode(quint16 k
         // send the result to the server
         processKeyEvent(keycode, unicode, qtcode & ~modmask, Qt::KeyboardModifiers(qtcode & modmask), pressed, autorepeat);
     }
-
-    return result;
 }
 
 void QBsdKeyboardHandler::switchLed(int led, bool state)
@@ -385,7 +367,9 @@ void QBsdKeyboardHandler::resetKeymap()
 
     // reset state, so we could switch keymaps at runtime
     m_modifiers = 0;
-    memset(m_locks, 0, sizeof(m_locks));
+    m_capsLock = false;
+    m_numLock = false;
+    m_scrollLock = false;
 
     //Set locks according to keyboard leds
     int leds = 0;
@@ -395,15 +379,12 @@ void QBsdKeyboardHandler::resetKeymap()
         switchLed(LED_CAP, false);
         switchLed(LED_SCR, false);
     } else {
-        //Capslock
         if ((leds & LED_CAP) > 0)
-            m_locks[0] = 1;
-        //Numlock
+            m_capsLock = true;
         if ((leds & LED_NUM) > 0)
-            m_locks[1] = 1;
-        //Scrollock
+            m_numLock = true;
         if ((leds & LED_SCR) > 0)
-            m_locks[2] = 1;
+            m_scrollLock = true;
 #ifdef QT_BSD_KEYBOARD_DEBUG
         qWarning("numlock=%d , capslock=%d, scrolllock=%d",m_locks[1],m_locks[0],m_locks[2]);
 #endif

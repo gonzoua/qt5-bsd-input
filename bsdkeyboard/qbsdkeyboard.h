@@ -92,17 +92,6 @@ public:
     explicit QBsdKeyboardHandler(const QString &key, const QString &specification);
     ~QBsdKeyboardHandler() override;
 
-    enum KeycodeAction {
-        None               = 0,
-
-        CapsLockOff        = 0x01000000,
-        CapsLockOn         = 0x01000001,
-        NumLockOff         = 0x02000000,
-        NumLockOn          = 0x02000001,
-        ScrollLockOff      = 0x03000000,
-        ScrollLockOn       = 0x03000001
-    };
-
     static Qt::KeyboardModifiers toQtModifiers(quint8 mod)
     {
         Qt::KeyboardModifiers qtmod = Qt::NoModifier;
@@ -119,7 +108,7 @@ public:
 
 protected:
     void switchLed(int led, bool state);
-    KeycodeAction processKeycode(quint16 keycode, bool pressed, bool autorepeat);
+    void processKeycode(quint16 keycode, bool pressed, bool autorepeat);
     void processKeyEvent(int nativecode, int unicode, int qtcode,
                          Qt::KeyboardModifiers modifiers, bool isPress, bool autoRepeat);\
     void revertTTYSettings();
@@ -138,7 +127,9 @@ private:
 
     // keymap handling
     quint8 m_modifiers;
-    quint8 m_locks[3];
+    bool m_capsLock;
+    bool m_numLock;
+    bool m_scrollLock;
 
     const QBsdKeyboardMap::Mapping *m_keymap;
     int m_keymapSize;
