@@ -63,27 +63,26 @@ QBsdMouseHandler::QBsdMouseHandler(const QString &key, const QString &specificat
     m_yOffset(0),
     m_buttons(Qt::NoButton)
 {
-    QString device;
+    QByteArray device;
     int level;
     Q_UNUSED(key);
 
     setObjectName(QLatin1String("BSD Sysmouse Handler"));
 
     if (specification.startsWith("/dev/"))
-        device = specification.toLocal8Bit();
+        device = QFile::encodeName(specification);
 
     if (device.isEmpty())
         device = QByteArrayLiteral("/dev/sysmouse");
 
-    const QByteArray devPath = QFile::encodeName(device);
-    m_devFd = QT_OPEN(devPath.constData(), O_RDONLY);
+    m_devFd = QT_OPEN(device.constData(), O_RDONLY);
     if (m_devFd < 0) {
-        qErrnoWarning(errno, "open(%s) failed", devPath.constData());
+        qErrnoWarning(errno, "open(%s) failed", device.constData());
         return;
     }
 
     if (ioctl(m_devFd, MOUSE_GETLEVEL, &level)) {
-        qErrnoWarning(errno, "ioctl(%s, MOUSE_GETLEVEL) failed", devPath.constData());
+        qErrnoWarning(errno, "ioctl(%s, MOUSE_GETLEVEL) failed", device.constData());
         close(m_devFd);
         m_devFd = -1;
         return;
@@ -104,7 +103,7 @@ QBsdMouseHandler::QBsdMouseHandler(const QString &key, const QString &specificat
     }
 
     if (fcntl(m_devFd, F_SETFL, O_NONBLOCK)) {
-        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", devPath.constData());
+        qErrnoWarning(errno, "fcntl(%s, F_SETFL, O_NONBLOCK) failed", device.constData());
         close(m_devFd);
         m_devFd = -1;
         return;
