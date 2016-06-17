@@ -30,7 +30,7 @@
 **
 ****************************************************************************/
 
-#include "qbsdsysmouse.h"
+#include "qbsdmouse.h"
 
 #include <QSocketNotifier>
 #include <QStringList>
@@ -54,7 +54,7 @@ enum {
     PsmLevelNative = 2
 };
 
-QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key, const QString &specification) :
+QBsdMouseHandler::QBsdMouseHandler(const QString &key, const QString &specification) :
     m_notifier(0),
     m_packetSize(0),
     m_x(0),
@@ -114,13 +114,13 @@ QBsdSysMouseHandler::QBsdSysMouseHandler(const QString &key, const QString &spec
     connect(m_notifier.data(), SIGNAL(activated(int)), this, SLOT(readMouseData()));
 }
 
-QBsdSysMouseHandler::~QBsdSysMouseHandler()
+QBsdMouseHandler::~QBsdMouseHandler()
 {
     if (m_devFd != -1)
         close(m_devFd);
 }
 
-void QBsdSysMouseHandler::readMouseData()
+void QBsdMouseHandler::readMouseData()
 {
     int8_t packet[MOUSE_SYS_PACKETSIZE];
     uint8_t status;

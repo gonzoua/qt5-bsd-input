@@ -30,8 +30,8 @@
 **
 ****************************************************************************/
 
-#ifndef QBSDSYSMOUSE_H
-#define QBSDSYSMOUSE_H
+#ifndef QBSDMOUSE_H
+#define QBSDMOUSE_H
 
 #include <qobject.h>
 
@@ -39,12 +39,12 @@ QT_BEGIN_NAMESPACE
 
 class QSocketNotifier;
 
-class QBsdSysMouseHandler : public QObject
+class QBsdMouseHandler : public QObject
 {
     Q_OBJECT
 public:
-    explicit QBsdSysMouseHandler(const QString &key, const QString &specification);
-    ~QBsdSysMouseHandler() override;
+    explicit QBsdMouseHandler(const QString &key, const QString &specification);
+    ~QBsdMouseHandler() override;
 
 private slots:
     void readMouseData();
@@ -60,4 +60,4 @@ private:
 
 QT_END_NAMESPACE
 
-#endif // QBSDSYSMOUSE_H
+#endif // QBSDMOUSE_H

@@ -31,24 +31,24 @@
 ****************************************************************************/
 
 #include <QtGui/qgenericplugin.h>
-#include "qbsdsysmouse.h"
+#include "qbsdmouse.h"
 
 QT_BEGIN_NAMESPACE
 
-class QBsdSysMousePlugin : public QGenericPlugin
+class QBsdMousePlugin : public QGenericPlugin
 {
     Q_OBJECT
-    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QGenericPluginFactoryInterface" FILE "bsdsysmouse.json")
+    Q_PLUGIN_METADATA(IID "org.qt-project.Qt.QGenericPluginFactoryInterface" FILE "bsdmouse.json")
 
 public:
     QObject* create(const QString &key, const QString &specification) override;
 };
 
-QObject* QBsdSysMousePlugin::create(const QString &key,
+QObject* QBsdMousePlugin::create(const QString &key,
                                    const QString &specification)
 {
-    if (!key.compare(QLatin1String("BsdSysMouse"), Qt::CaseInsensitive)) {
-        return new QBsdSysMouseHandler(key, specification);
+    if (!key.compare(QLatin1String("BsdMouse"), Qt::CaseInsensitive)) {
+        return new QBsdMouseHandler(key, specification);
     }
     return 0;
 }
